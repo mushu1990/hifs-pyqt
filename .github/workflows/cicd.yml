@@ -1,0 +1,105 @@
+name: PyQt CI/CD
+
+on:
+  push:
+    branches: [main, dev]
+    paths:
+      - "*/**"  # 监听根目录下的所有文件变化
+  pull_request:
+    branches: [main, dev]
+    paths:
+      - "*/**"  # 监听根目录下的所有文件变化
+  workflow_dispatch:
+
+env:
+  SOURCE_DIR: src
+  DEPLOY_DIR: /opt/pyqt_app  # 服务器目标目录
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # =====================================
+      # 阶段1：构建 PyQt 项目
+      # =====================================
+      - uses: actions/checkout@v4
+
+      # 设置 Python 环境
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.12'
+
+      # 安装 Poetry
+      - name: Install Poetry
+        run: |
+          curl -sSL https://install.python-poetry.org | python3 -
+          export PATH="$HOME/.local/bin:$PATH"
+
+      # 安装项目依赖
+      - name: Install dependencies with Poetry
+        run: |
+          poetry install
+
+      # 打包 PyQt 应用程序 (.exe)
+      - name: Build PyQt Application (.exe)
+        run: |
+          poetry run pyinstaller --onefile --windowed ${SOURCE_DIR}/my_app.py  # 打包为 .exe 文件
+
+      # 打包 PyQt 应用程序 (.dmg)
+      - name: Build PyQt Application (.dmg)
+        run: |
+          poetry run brew install dmgbuild  # 安装 dmgbuild
+          poetry run dmgbuild -s ${SOURCE_DIR}/my_app_settings.py my_app.dmg  # 使用 dmgbuild 打包为 .dmg 文件
+
+      # =====================================
+      # 阶段2：传输构建文件到服务器
+      # =====================================
+      - name: Transfer Files to Server
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USERNAME }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          port: ${{ secrets.SERVER_PORT }}
+          source: "./dist/my_app.exe"
+          target: "${{ env.DEPLOY_DIR }}/my_app.exe"
+          overwrite: true
+          debug: true
+
+      - name: Transfer .dmg File to Server
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USERNAME }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          port: ${{ secrets.SERVER_PORT }}
+          source: "./dist/my_app.dmg"
+          target: "${{ env.DEPLOY_DIR }}/my_app.dmg"
+          overwrite: true
+          debug: true
+
+      # =====================================
+      # 阶段3：触发服务器部署（使用现有脚本）
+      # =====================================
+      - name: Execute Deployment on Server
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USERNAME }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          port: ${{ secrets.SERVER_PORT }}
+          script: |
+            cd ${{ env.DEPLOY_DIR }}
+            chmod +x deploy.sh
+            ./deploy.sh prod
+
+      # =====================================
+      # 阶段4：通知 API 新版本发布
+      # =====================================
+      - name: Notify API of New Version
+        run: |
+          curl -X POST https://your-api.com/version-update \
+          -H "Content-Type: application/json" \
+          -d '{"version": "1.0.0", "message": "New version released"}'
