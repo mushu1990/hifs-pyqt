@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "hifs-pyqt"
+version = "0.1.0"
+description = ""
+authors = ["mushu <929975447@qq.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+pyqt6 = "^6.8.0"
+vtk = {extras = ["qt"], version = "^9.4.1"}
+pyobjc = "^11.0"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
